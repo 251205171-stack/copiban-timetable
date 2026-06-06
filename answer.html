@@ -26,9 +26,9 @@ input[type="text"]{width:100%;padding:12px;border:1px solid var(--border);border
 <body>
 <div class="container">
 <h1>出演バンド回答</h1>
-<p class="description">自分が出演するバンドをすべて選択してください。名前はこの端末に保存され、次回から自動入力されます。</p>
+<p class="description">自分が出演するバンドをすべて選択してください。名前はこの端末に保存され、次回から自動入力されます。フルネーム推奨です。</p>
 <div id="success" class="success"></div><div id="error" class="error"></div>
-<div class="card"><label class="title" for="nameInput">名前</label><input id="nameInput" type="text" placeholder="例：そうた"><p class="notice">ニックネーム可。送信後、この端末に保存されます。</p></div>
+<div class="card"><label class="title" for="nameInput">名前</label><input id="nameInput" type="text" placeholder="例：山田太郎"><p class="notice">前回利用者の名前が入っている場合は、自分の名前に変更してください。</p></div>
 <div id="days">読み込み中...</div>
 <div class="actions"><div class="count">選択中：<span id="selectedCount">0</span>件</div><button id="submitBtn" class="submit-btn" onclick="submitAnswer()">送信</button></div>
 </div>
@@ -51,7 +51,7 @@ async function loadTimetable(){
     timetable=data.timetable || [];
     renderDays();
   }catch(e){
-    document.getElementById("days").innerHTML="読み込みに失敗しました。URL設定を確認してください。";
+    document.getElementById("days").innerHTML="読み込みに失敗しました。";
   }
 }
 
@@ -64,6 +64,7 @@ function renderDays(){
     if(!groups[key]) groups[key]={day:item.Day,date:item.Date,venue:item.Venue,items:[]};
     groups[key].items.push(item);
   });
+
   Object.values(groups).slice(0,5).forEach((day,index)=>{
     const dayEl=document.createElement("div");
     dayEl.className="day"+(index===0?" open":"");
@@ -72,6 +73,7 @@ function renderDays(){
     header.className="day-header";header.type="button";header.onclick=()=>dayEl.classList.toggle("open");
     header.innerHTML=`<div>${escapeHtml(day.day)} ${escapeHtml(day.date)}<br><span class="meta">${escapeHtml(day.venue)} / ${selectable}組</span></div><div>⌄</div>`;
     const content=document.createElement("div");content.className="day-content";
+
     day.items.forEach(item=>{
       const br=isBreak(item.Band);
       const row=document.createElement("label");row.className="band-item"+(br?" break":"");
