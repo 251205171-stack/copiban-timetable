@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>出演バンド回答</title>
+<style>
+:root{--bg:#f6f6f6;--card:#fff;--text:#222;--muted:#666;--border:#ddd;--accent:#222}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue","Yu Gothic",YuGothic,sans-serif;background:var(--bg);color:var(--text)}
+.container{max-width:760px;margin:0 auto;padding:18px}
+h1{font-size:24px;margin:10px 0 6px}.description{color:var(--muted);font-size:14px;line-height:1.6;margin-bottom:18px}
+.card,.day{background:var(--card);border:1px solid var(--border);border-radius:14px;margin-bottom:14px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+.card{padding:16px}label.title{display:block;font-weight:bold;margin-bottom:8px}
+input[type="text"]{width:100%;padding:12px;border:1px solid var(--border);border-radius:10px;font-size:16px}
+.day{overflow:hidden}.day-header{width:100%;border:none;background:#fff;padding:15px 16px;display:flex;justify-content:space-between;align-items:center;font-size:17px;font-weight:bold;cursor:pointer;text-align:left}
+.meta{font-size:13px;font-weight:normal;color:var(--muted)}.day-content{display:none;border-top:1px solid var(--border);padding:8px 12px 12px}.day.open .day-content{display:block}
+.band-item{display:flex;gap:10px;align-items:flex-start;padding:10px 4px;border-bottom:1px solid #eee}.band-item:last-child{border-bottom:none}
+.band-item input{transform:scale(1.25);margin-top:4px}.band-main{flex:1}.band-name{font-weight:bold;line-height:1.4}.band-sub{font-size:13px;color:var(--muted);margin-top:2px}.break{opacity:.55}
+.actions{position:sticky;bottom:0;background:rgba(246,246,246,.96);backdrop-filter:blur(6px);padding:12px 0 4px}
+.submit-btn{width:100%;border:none;border-radius:12px;background:var(--accent);color:#fff;font-size:17px;font-weight:bold;padding:14px;cursor:pointer}.submit-btn:disabled{opacity:.45}
+.count{text-align:center;color:var(--muted);font-size:13px;margin-bottom:8px}.notice{margin-top:10px;font-size:14px;color:var(--muted);line-height:1.6}
+.success,.error{display:none;padding:12px;border-radius:12px;margin-bottom:14px;font-weight:bold}.success{background:#e8f7ec;border:1px solid #bfe6c9;color:#166329}.error{background:#fff1f1;border:1px solid #f0bcbc;color:#9a1c1c}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>出演バンド回答</h1>
+<p class="description">自分が出演するバンドをすべて選択してください。名前はこの端末に保存され、次回から自動入力されます。</p>
+<div id="success" class="success"></div><div id="error" class="error"></div>
+<div class="card"><label class="title" for="nameInput">名前</label><input id="nameInput" type="text" placeholder="例：そうた"><p class="notice">ニックネーム可。送信後、この端末に保存されます。</p></div>
+<div id="days">読み込み中...</div>
+<div class="actions"><div class="count">選択中：<span id="selectedCount">0</span>件</div><button id="submitBtn" class="submit-btn" onclick="submitAnswer()">送信</button></div>
+</div>
+
+<script>
+const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxhcZwLLqf_tPvchibYn4YxwG0-6JBIXvH3w9aky6l0n4NcWyi9_F2MJPOJj51lFU4/exec";
+const STORAGE_NAME_KEY = "copiban_saved_name";
+let timetable=[];
+
+window.addEventListener("DOMContentLoaded",async()=>{
+  const savedName=localStorage.getItem(STORAGE_NAME_KEY);
+  if(savedName) document.getElementById("nameInput").value=savedName;
+  await loadTimetable();
+});
+
+async function loadTimetable(){
+  try{
+    const res=await fetch(GAS_WEB_APP_URL+"?action=timetable");
+    const data=await res.json();
+    timetable=data.timetable || [];
+    renderDays();
+  }catch(e){
+    document.getElementById("days").innerHTML="読み込みに失敗しました。URL設定を確認してください。";
+  }
+}
+
+function renderDays(){
+  const daysEl=document.getElementById("days");
+  daysEl.innerHTML="";
+  const groups={};
+  timetable.forEach(item=>{
+    const key=`${item.Day}__${item.Date}__${item.Venue}`;
+    if(!groups[key]) groups[key]={day:item.Day,date:item.Date,venue:item.Venue,items:[]};
+    groups[key].items.push(item);
+  });
+  Object.values(groups).slice(0,5).forEach((day,index)=>{
+    const dayEl=document.createElement("div");
+    dayEl.className="day"+(index===0?" open":"");
+    const selectable=day.items.filter(i=>!isBreak(i.Band)).length;
+    const header=document.createElement("button");
+    header.className="day-header";header.type="button";header.onclick=()=>dayEl.classList.toggle("open");
+    header.innerHTML=`<div>${escapeHtml(day.day)} ${escapeHtml(day.date)}<br><span class="meta">${escapeHtml(day.venue)} / ${selectable}組</span></div><div>⌄</div>`;
+    const content=document.createElement("div");content.className="day-content";
+    day.items.forEach(item=>{
+      const br=isBreak(item.Band);
+      const row=document.createElement("label");row.className="band-item"+(br?" break":"");
+      if(br){
+        row.innerHTML=`<input type="checkbox" disabled><div class="band-main"><div class="band-name">${escapeHtml(item.Band)}</div><div class="band-sub">${item.StartTime} - ${item.EndTime}</div></div>`;
+      }else{
+        row.innerHTML=`<input type="checkbox" class="band-check" value="${item.ID}" data-band="${escapeHtml(item.Band)}" onchange="updateSelectedCount()"><div class="band-main"><div class="band-name">${escapeHtml(item.Band)}</div><div class="band-sub">${item.StartTime} - ${item.EndTime} / ${escapeHtml(item.Original || "")}</div></div>`;
+      }
+      content.appendChild(row);
+    });
+    dayEl.appendChild(header);dayEl.appendChild(content);daysEl.appendChild(dayEl);
+  });
+  updateSelectedCount();
+}
+
+function isBreak(band){return String(band).includes("休憩");}
+function updateSelectedCount(){document.getElementById("selectedCount").textContent=document.querySelectorAll(".band-check:checked").length;}
+
+async function submitAnswer(){
+  hideMessages();
+  const name=document.getElementById("nameInput").value.trim();
+  if(!name){showError("名前を入力してください。");return;}
+  const selected=[...document.querySelectorAll(".band-check:checked")].map(i=>({bandId:i.value,bandName:i.dataset.band}));
+  if(selected.length===0){showError("出演するバンドを1つ以上選択してください。");return;}
+  localStorage.setItem(STORAGE_NAME_KEY,name);
+  const btn=document.getElementById("submitBtn");btn.disabled=true;btn.textContent="送信中...";
+  try{
+    await fetch(GAS_WEB_APP_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,selected,submittedAt:new Date().toISOString()})});
+    showSuccess("送信しました。回答を修正したい場合は、選び直してもう一度送信してください。");
+  }catch(e){showError("送信に失敗しました。");}
+  btn.disabled=false;btn.textContent="送信";
+}
+
+function showSuccess(m){const el=document.getElementById("success");el.textContent=m;el.style.display="block";window.scrollTo({top:0,behavior:"smooth"});}
+function showError(m){const el=document.getElementById("error");el.textContent=m;el.style.display="block";window.scrollTo({top:0,behavior:"smooth"});}
+function hideMessages(){document.getElementById("success").style.display="none";document.getElementById("error").style.display="none";}
+function escapeHtml(str){return String(str ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");}
+</script>
+</body>
+</html>

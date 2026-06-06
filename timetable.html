@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>出演者付きタイムテーブル</title>
+<style>
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue","Yu Gothic",YuGothic,sans-serif;background:#f6f6f6;color:#222}
+.container{max-width:820px;margin:auto;padding:18px}h1{font-size:24px;margin-bottom:8px}.top{font-size:13px;color:#666;margin-bottom:14px}
+input{width:100%;padding:12px;border:1px solid #ddd;border-radius:10px;font-size:16px;margin-bottom:14px}.day{margin-bottom:20px}.day-title{font-weight:bold;font-size:19px;margin:18px 0 10px}
+.item{background:#fff;border:1px solid #ddd;border-radius:14px;padding:13px;margin-bottom:10px}.row{display:flex;gap:10px}.time{width:98px;font-weight:bold;color:#333}.main{flex:1}.band{font-weight:bold}.original{font-size:13px;color:#666;margin-top:2px}
+.members{margin-top:8px;font-size:14px;line-height:1.6}.none{color:#999}.break{opacity:.55}.hidden{display:none}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>出演者付きタイムテーブル</h1>
+<div class="top">自動更新：30秒ごと / 最終更新 <span id="updated">-</span></div>
+<input id="search" type="text" placeholder="名前・バンド名・コピー元で検索" oninput="render()">
+<div id="app">読み込み中...</div>
+</div>
+
+<script>
+const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxhcZwLLqf_tPvchibYn4YxwG0-6JBIXvH3w9aky6l0n4NcWyi9_F2MJPOJj51lFU4/exec";
+let timetable=[];
+let answers={};
+
+window.addEventListener("DOMContentLoaded",async()=>{
+  await loadData();
+  setInterval(loadData,30000);
+});
+
+async function loadData(){
+  try{
+    const res=await fetch(GAS_WEB_APP_URL+"?action=all");
+    const data=await res.json();
+    timetable=data.timetable || [];
+    answers=data.answers || {};
+    document.getElementById("updated").textContent=new Date().toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+    render();
+  }catch(e){
+    document.getElementById("app").innerHTML="読み込みに失敗しました。";
+  }
+}
+
+function render(){
+  const q=document.getElementById("search").value.trim().toLowerCase();
+  const groups={};
+  timetable.forEach(item=>{
+    const key=`${item.Day}__${item.Date}__${item.Venue}`;
+    if(!groups[key]) groups[key]={day:item.Day,date:item.Date,venue:item.Venue,items:[]};
+    groups[key].items.push(item);
+  });
+
+  const app=document.getElementById("app");
+  app.innerHTML="";
+  Object.values(groups).slice(0,5).forEach(day=>{
+    const dayBox=document.createElement("div");
+    dayBox.className="day";
+    dayBox.innerHTML=`<div class="day-title">${escapeHtml(day.day)} ${escapeHtml(day.date)}｜${escapeHtml(day.venue)}</div>`;
+    let visibleCount=0;
+
+    day.items.forEach(item=>{
+      const members=answers[String(item.ID)] || [];
+      const haystack=[item.Band,item.Original,...members].join(" ").toLowerCase();
+      if(q && !haystack.includes(q)) return;
+      visibleCount++;
+
+      const div=document.createElement("div");
+      div.className="item"+(String(item.Band).includes("休憩")?" break":"");
+      div.innerHTML=`
+        <div class="row">
+          <div class="time">${item.StartTime}<br>- ${item.EndTime}</div>
+          <div class="main">
+            <div class="band">${escapeHtml(item.Band)}</div>
+            <div class="original">${escapeHtml(item.Original || "")}</div>
+            <div class="members">${members.length ? "👤 "+members.map(escapeHtml).join(" / ") : "<span class='none'>未回答</span>"}</div>
+          </div>
+        </div>`;
+      dayBox.appendChild(div);
+    });
+
+    if(visibleCount>0) app.appendChild(dayBox);
+  });
+
+  if(!app.innerHTML) app.innerHTML="該当する項目がありません。";
+}
+
+function escapeHtml(str){return String(str ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");}
+</script>
+</body>
+</html>
